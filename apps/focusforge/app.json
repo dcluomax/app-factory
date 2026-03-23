@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "FocusForge",
+    "slug": "focusforge",
+    "version": "1.0.0",
+    "orientation": "default",
+    "userInterfaceStyle": "dark",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "backgroundColor": "#263238"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.orthogonal.focusforge"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "backgroundColor": "#263238"
+      },
+      "package": "com.orthogonal.focusforge"
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "YOUR_ADMOB_APP_ID",
+          "iosAppId": "YOUR_ADMOB_APP_ID"
+        }
+      ]
+    ]
+  }
+}

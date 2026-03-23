@@ -1,0 +1,28 @@
+# Secrets
+*.keystore
+*.jks
+*.pem
+.env
+secrets/
+signing-keys/
+ChromePlayConsole/
+play-sa.json
+
+# Build artifacts
+*.aab
+*.apk
+node_modules/
+android/app/build/
+android/.gradle/
+.gradle/
+*.hprof
+
+# Screenshots
+screenshots/
+*.png
+!webapps/**/*.png
+!docs/*.png
+
+# OS
+.DS_Store
+Thumbs.db

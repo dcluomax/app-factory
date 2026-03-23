@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PixelStrip — EXIF Metadata Remover</title>
+<meta name="description" content="Remove GPS, camera info, and timestamps from photos before sharing. 100% private.">
+<meta name="theme-color" content="#2196F3">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔒</text></svg>">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--c:#2196F3;--bg:#f5f5f5;--card:#fff;--text:#222;--sub:#666;--danger:#e53935}
+@media(prefers-color-scheme:dark){:root{--bg:#1a1a1a;--card:#2d2d2d;--text:#eee;--sub:#aaa}}
+body{font-family:-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+header{background:var(--c);color:#fff;padding:16px 20px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+header h1{font-size:1.3rem;font-weight:600}
+header span{font-size:1.5rem}
+.container{max-width:600px;margin:0 auto;padding:20px}
+.drop{border:3px dashed #ccc;border-radius:16px;padding:60px 20px;text-align:center;cursor:pointer;transition:.2s;background:var(--card);margin-bottom:20px}
+.drop:hover,.drop.over{border-color:var(--c);background:rgba(33,150,243,.05)}
+.drop .icon{font-size:3rem}
+.drop p{color:var(--sub);margin-top:8px}
+.meta-list{background:var(--card);border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);display:none}
+.meta-list.show{display:block}
+.meta-list h3{margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.meta-item{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(0,0,0,.06)}
+.meta-item:last-child{border:none}
+.meta-item .key{font-weight:600;color:var(--sub);font-size:.9rem}
+.meta-item .val{color:var(--danger);font-weight:500;max-width:60%;text-align:right;word-break:break-all;font-size:.9rem}
+.meta-item .val.safe{color:#4CAF50}
+.count{background:var(--danger);color:#fff;border-radius:20px;padding:2px 10px;font-size:.8rem;font-weight:700}
+.btn{background:var(--c);color:#fff;border:none;padding:12px 24px;border-radius:8px;font-size:1rem;cursor:pointer;width:100%;font-weight:600;transition:.2s;margin-top:12px}
+.btn.danger{background:var(--danger)}
+.btn:hover{filter:brightness(1.1)}
+.success{background:#4CAF50;color:#fff;padding:16px;border-radius:12px;text-align:center;display:none;margin-bottom:16px;font-weight:600}
+.success.show{display:block}
+footer{text-align:center;padding:20px;color:var(--sub);font-size:.8rem}
+footer a{color:var(--c)}
+#fileInput{display:none}
+</style>
+</head>
+<body>
+<div id="installBanner" style="background:var(--c,#333);color:#fff;padding:10px 20px;text-align:center;font-size:.9rem;display:none;align-items:center;justify-content:center;gap:8px">
+<span>📱 Add to Home Screen for app-like experience</span>
+<button onclick="installPWA()" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:4px 12px;border-radius:6px;font-weight:600;cursor:pointer">Install</button>
+<button onclick="this.parentElement.style.display=&quot;none&quot;" style="background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;margin-left:8px">✕</button>
+</div>
+<script>
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;document.getElementById('installBanner').style.display='flex'});
+function installPWA(){if(deferredPrompt){deferredPrompt.prompt();deferredPrompt=null;document.getElementById('installBanner').style.display='none'}}
+</script>
+<header><span>🔒</span><h1>PixelStrip</h1></header>
+<div class="container">
+  <div class="drop" id="drop" onclick="document.getElementById('fileInput').click()">
+    <div class="icon">📸</div>
+    <p><strong>Drop a photo here</strong> or click to select</p>
+    <p>View and remove hidden metadata</p>
+  </div>
+  <input type="file" id="fileInput" accept="image/*">
+
+  <div class="success" id="success">✅ Metadata stripped! Download your clean photo below.</div>
+
+  <div class="meta-list" id="metaList">
+    <h3>⚠️ Found Metadata <span class="count" id="metaCount">0</span></h3>
+    <div id="metaItems"></div>
+    <button class="btn danger" onclick="stripAndDownload()">🗑️ Strip All Metadata & Download</button>
+  </div>
+</div>
+<footer>
+  <p>100% browser-based — your photos never leave your device</p>
+  <p><a href="process.env.PRIVACY_URL || 'https://your-site.com/privacy-policy/'">Privacy Policy</a> · © 2026 Orthogonal</p>
+</footer>
+
+<script>
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const metaList = document.getElementById('metaList');
+const metaItems = document.getElementById('metaItems');
+const metaCount = document.getElementById('metaCount');
+const success = document.getElementById('success');
+let currentFile = null;
+
+['dragover','dragenter'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('over'); }));
+['dragleave','drop'].forEach(e => drop.addEventListener(e, () => drop.classList.remove('over')));
+drop.addEventListener('drop', ev => { ev.preventDefault(); handleFile(ev.dataTransfer.files[0]); });
+fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
+
+function handleFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  currentFile = file;
+  success.classList.remove('show');
+  readExif(file);
+}
+
+function readExif(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const view = new DataView(e.target.result);
+    const metadata = extractJpegMetadata(view, e.target.result.byteLength);
+    displayMetadata(metadata);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function extractJpegMetadata(view, length) {
+  const meta = [];
+  if (view.getUint16(0) !== 0xFFD8) {
+    meta.push({ key: 'Format', val: 'Not JPEG — limited metadata extraction' });
+    return meta;
+  }
+
+  let offset = 2;
+  while (offset < length - 2) {
+    const marker = view.getUint16(offset);
+    if (marker === 0xFFE1) {
+      const segLen = view.getUint16(offset + 2);
+      try {
+        const exifStr = String.fromCharCode(view.getUint8(offset+4), view.getUint8(offset+5), view.getUint8(offset+6), view.getUint8(offset+7));
+        if (exifStr === 'Exif') {
+          meta.push({ key: 'EXIF Data', val: 'Present (' + segLen + ' bytes)' });
+          parseIFD(view, offset + 10, offset + 10, meta);
+        }
+      } catch(e) {}
+      offset += 2 + segLen;
+    } else if (marker === 0xFFE0) {
+      meta.push({ key: 'JFIF Header', val: 'Present' });
+      offset += 2 + view.getUint16(offset + 2);
+    } else if ((marker & 0xFF00) === 0xFF00 && marker !== 0xFFDA) {
+      offset += 2 + view.getUint16(offset + 2);
+    } else {
+      break;
+    }
+  }
+  if (meta.length === 0) meta.push({ key: 'Status', val: 'No metadata found', safe: true });
+  return meta;
+}
+
+function parseIFD(view, ifdOffset, tiffOffset, meta) {
+  try {
+    const le = view.getUint16(tiffOffset) === 0x4949;
+    const g = (o, s) => s === 2 ? (le ? view.getUint16(o, true) : view.getUint16(o)) : (le ? view.getUint32(o, true) : view.getUint32(o));
+    
+    const count = g(ifdOffset, 2);
+    const tags = { 0x010F: 'Camera Make', 0x0110: 'Camera Model', 0x0131: 'Software',
+      0x0132: 'Date/Time', 0x8769: 'EXIF SubIFD', 0x8825: 'GPS Data' };
+    
+    for (let i = 0; i < Math.min(count, 50); i++) {
+      const entry = ifdOffset + 2 + i * 12;
+      const tag = g(entry, 2);
+      if (tags[tag]) {
+        if (tag === 0x8825) meta.push({ key: '📍 GPS Location', val: 'PRESENT — Location data found!' });
+        else if (tag === 0x0132) meta.push({ key: '📅 ' + tags[tag], val: 'Timestamp recorded' });
+        else meta.push({ key: '📷 ' + tags[tag], val: 'Detected' });
+      }
+    }
+  } catch(e) {}
+}
+
+function displayMetadata(meta) {
+  metaItems.innerHTML = '';
+  meta.forEach(m => {
+    const div = document.createElement('div');
+    div.className = 'meta-item';
+    div.innerHTML = '<span class="key">' + m.key + '</span><span class="val' + (m.safe ? ' safe' : '') + '">' + m.val + '</span>';
+    metaItems.appendChild(div);
+  });
+  metaCount.textContent = meta.length;
+  metaList.classList.add('show');
+}
+
+function stripAndDownload() {
+  if (!currentFile) return;
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+    canvas.toBlob(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = currentFile.name.replace(/\.[^.]+$/, '_clean.jpg');
+      a.click();
+      success.classList.add('show');
+      metaList.classList.remove('show');
+    }, 'image/jpeg', 0.95);
+  };
+  img.src = URL.createObjectURL(currentFile);
+}
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
