@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuickShrink — Image Compressor</title>
+<meta name="description" content="Compress images instantly in your browser. No upload, 100% private.">
+<meta name="theme-color" content="#4CAF50">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--c:#4CAF50;--bg:#f5f5f5;--card:#fff;--text:#222;--sub:#666}
+@media(prefers-color-scheme:dark){:root{--bg:#1a1a1a;--card:#2d2d2d;--text:#eee;--sub:#aaa}}
+body{font-family:-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+header{background:var(--c);color:#fff;padding:16px 20px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+header h1{font-size:1.3rem;font-weight:600}
+header span{font-size:1.5rem}
+.container{max-width:600px;margin:0 auto;padding:20px}
+.drop{border:3px dashed #ccc;border-radius:16px;padding:60px 20px;text-align:center;cursor:pointer;transition:.2s;background:var(--card);margin-bottom:20px}
+.drop:hover,.drop.over{border-color:var(--c);background:rgba(76,175,80,.05)}
+.drop p{color:var(--sub);margin-top:8px}
+.drop .icon{font-size:3rem}
+.controls{background:var(--card);border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.controls label{display:block;font-weight:600;margin-bottom:8px}
+.controls input[type=range]{width:100%;accent-color:var(--c)}
+.controls .val{text-align:right;color:var(--c);font-weight:700;font-size:1.1rem}
+.result{background:var(--card);border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.08);display:none}
+.result.show{display:block}
+.result img{max-width:100%;border-radius:8px;margin:12px 0}
+.stats{display:flex;gap:16px;flex-wrap:wrap;margin:12px 0}
+.stat{flex:1;min-width:100px;text-align:center;padding:12px;background:var(--bg);border-radius:8px}
+.stat .num{font-size:1.4rem;font-weight:700;color:var(--c)}
+.stat .label{font-size:.8rem;color:var(--sub);margin-top:4px}
+.btn{background:var(--c);color:#fff;border:none;padding:12px 24px;border-radius:8px;font-size:1rem;cursor:pointer;width:100%;font-weight:600;transition:.2s}
+.btn:hover{filter:brightness(1.1)}
+.btn:disabled{opacity:.5;cursor:default}
+footer{text-align:center;padding:20px;color:var(--sub);font-size:.8rem}
+footer a{color:var(--c)}
+#fileInput{display:none}
+</style>
+</head>
+<body>
+<div id="installBanner" style="background:var(--c,#333);color:#fff;padding:10px 20px;text-align:center;font-size:.9rem;display:none;align-items:center;justify-content:center;gap:8px">
+<span>📱 Add to Home Screen for app-like experience</span>
+<button onclick="installPWA()" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:4px 12px;border-radius:6px;font-weight:600;cursor:pointer">Install</button>
+<button onclick="this.parentElement.style.display=&quot;none&quot;" style="background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;margin-left:8px">✕</button>
+</div>
+<script>
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;document.getElementById('installBanner').style.display='flex'});
+function installPWA(){if(deferredPrompt){deferredPrompt.prompt();deferredPrompt=null;document.getElementById('installBanner').style.display='none'}}
+</script>
+<header><span>📦</span><h1>QuickShrink</h1></header>
+<div class="container">
+  <div class="drop" id="drop" onclick="document.getElementById('fileInput').click()">
+    <div class="icon">🖼️</div>
+    <p><strong>Drop image here</strong> or click to select</p>
+    <p>JPEG, PNG, WebP supported</p>
+  </div>
+  <input type="file" id="fileInput" accept="image/*" multiple>
+
+  <div class="controls">
+    <label>Quality: <span class="val" id="qualVal">80%</span></label>
+    <input type="range" id="quality" min="10" max="100" value="80">
+  </div>
+
+  <div class="result" id="result">
+    <h3>Result</h3>
+    <div class="stats">
+      <div class="stat"><div class="num" id="origSize">-</div><div class="label">Original</div></div>
+      <div class="stat"><div class="num" id="newSize">-</div><div class="label">Compressed</div></div>
+      <div class="stat"><div class="num" id="savings">-</div><div class="label">Saved</div></div>
+    </div>
+    <img id="preview" alt="Compressed preview">
+    <button class="btn" id="downloadBtn" onclick="downloadResult()">⬇ Download Compressed Image</button>
+  </div>
+</div>
+<footer>
+  <p>100% browser-based — your images never leave your device</p>
+  <p><a href="process.env.PRIVACY_URL || 'https://your-site.com/privacy-policy/'">Privacy Policy</a> · © 2026 Orthogonal</p>
+</footer>
+
+<script>
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const quality = document.getElementById('quality');
+const qualVal = document.getElementById('qualVal');
+const result = document.getElementById('result');
+let compressedBlob = null, compressedName = '';
+
+quality.oninput = () => qualVal.textContent = quality.value + '%';
+
+['dragover','dragenter'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('over'); }));
+['dragleave','drop'].forEach(e => drop.addEventListener(e, () => drop.classList.remove('over')));
+drop.addEventListener('drop', ev => { ev.preventDefault(); handleFiles(ev.dataTransfer.files); });
+fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+
+function handleFiles(files) {
+  if (!files.length) return;
+  compress(files[0]);
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+function compress(file) {
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    
+    const q = quality.value / 100;
+    const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+    
+    canvas.toBlob(blob => {
+      compressedBlob = blob;
+      compressedName = file.name.replace(/\.[^.]+$/, '') + '_compressed' + (mimeType === 'image/png' ? '.png' : '.jpg');
+      
+      const origSize = file.size;
+      const newSz = blob.size;
+      const saved = Math.max(0, ((origSize - newSz) / origSize * 100));
+      
+      document.getElementById('origSize').textContent = formatSize(origSize);
+      document.getElementById('newSize').textContent = formatSize(newSz);
+      document.getElementById('savings').textContent = saved.toFixed(0) + '%';
+      document.getElementById('preview').src = URL.createObjectURL(blob);
+      result.classList.add('show');
+    }, mimeType, q);
+  };
+  img.src = URL.createObjectURL(file);
+}
+
+function downloadResult() {
+  if (!compressedBlob) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(compressedBlob);
+  a.download = compressedName;
+  a.click();
+}
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>

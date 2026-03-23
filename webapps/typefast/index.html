@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TypeFast — Text Snippet Manager</title>
+<meta name="description" content="Save and instantly paste code snippets, templates, and frequently used text.">
+<meta name="theme-color" content="#9C27B0">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⌨️</text></svg>">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--c:#9C27B0;--bg:#f5f5f5;--card:#fff;--text:#222;--sub:#666;--border:#e0e0e0}
+@media(prefers-color-scheme:dark){:root{--bg:#1a1a1a;--card:#2d2d2d;--text:#eee;--sub:#aaa;--border:#444}}
+body{font-family:-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+header{background:var(--c);color:#fff;padding:16px 20px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+header h1{font-size:1.3rem;font-weight:600;flex:1}
+header span{font-size:1.5rem}
+.search-box{background:rgba(255,255,255,.2);border:none;color:#fff;padding:8px 14px;border-radius:8px;font-size:.9rem;width:200px}
+.search-box::placeholder{color:rgba(255,255,255,.7)}
+.container{max-width:700px;margin:0 auto;padding:20px}
+.toolbar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.toolbar .btn-sm{background:var(--card);border:1px solid var(--border);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:.85rem;color:var(--text);transition:.2s}
+.toolbar .btn-sm:hover,.toolbar .btn-sm.active{background:var(--c);color:#fff;border-color:var(--c)}
+.add-bar{display:flex;gap:8px;margin-bottom:20px}
+.add-bar input{flex:1;padding:10px 14px;border:2px solid var(--border);border-radius:8px;font-size:.95rem;background:var(--card);color:var(--text)}
+.add-bar input:focus{border-color:var(--c);outline:none}
+.btn{background:var(--c);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:.95rem;cursor:pointer;font-weight:600;transition:.2s;white-space:nowrap}
+.btn:hover{filter:brightness(1.1)}
+.snippet{background:var(--card);border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:.2s;border-left:4px solid var(--c)}
+.snippet:hover{box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.snippet-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.snippet-title{font-weight:700;font-size:1rem}
+.snippet-cat{font-size:.75rem;background:rgba(156,39,176,.1);color:var(--c);padding:3px 8px;border-radius:4px}
+.snippet-body{font-family:'SF Mono',Consolas,monospace;font-size:.85rem;background:var(--bg);padding:12px;border-radius:8px;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow:auto;line-height:1.5}
+.snippet-actions{display:flex;gap:8px;margin-top:10px}
+.snippet-actions button{background:none;border:1px solid var(--border);padding:5px 12px;border-radius:6px;cursor:pointer;font-size:.8rem;color:var(--sub);transition:.2s}
+.snippet-actions button:hover{border-color:var(--c);color:var(--c)}
+.snippet-actions button.copied{background:var(--c);color:#fff;border-color:var(--c)}
+.empty{text-align:center;padding:60px 20px;color:var(--sub)}
+.empty .icon{font-size:3rem;margin-bottom:12px}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:100}
+.modal-bg.show{display:flex}
+.modal{background:var(--card);border-radius:16px;padding:24px;width:90%;max-width:500px;max-height:80vh;overflow:auto}
+.modal h3{margin-bottom:16px}
+.modal label{display:block;font-weight:600;margin:12px 0 4px;font-size:.9rem}
+.modal input,.modal textarea,.modal select{width:100%;padding:10px;border:2px solid var(--border);border-radius:8px;font-size:.95rem;background:var(--card);color:var(--text);font-family:inherit}
+.modal textarea{min-height:120px;font-family:'SF Mono',Consolas,monospace;font-size:.85rem}
+.modal .btns{display:flex;gap:8px;margin-top:16px}
+.modal .btns button{flex:1}
+.btn-ghost{background:none;border:1px solid var(--border);color:var(--text);padding:10px 20px;border-radius:8px;cursor:pointer;font-size:.95rem}
+.count{color:var(--sub);font-size:.85rem;margin-bottom:12px}
+footer{text-align:center;padding:20px;color:var(--sub);font-size:.8rem}
+footer a{color:var(--c)}
+</style>
+</head>
+<body>
+<div id="installBanner" style="background:var(--c,#333);color:#fff;padding:10px 20px;text-align:center;font-size:.9rem;display:none;align-items:center;justify-content:center;gap:8px">
+<span>📱 Add to Home Screen for app-like experience</span>
+<button onclick="installPWA()" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:4px 12px;border-radius:6px;font-weight:600;cursor:pointer">Install</button>
+<button onclick="this.parentElement.style.display=&quot;none&quot;" style="background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;margin-left:8px">✕</button>
+</div>
+<script>
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;document.getElementById('installBanner').style.display='flex'});
+function installPWA(){if(deferredPrompt){deferredPrompt.prompt();deferredPrompt=null;document.getElementById('installBanner').style.display='none'}}
+</script>
+<header>
+  <span>⌨️</span>
+  <h1>TypeFast</h1>
+  <input class="search-box" type="text" id="search" placeholder="🔍 Search snippets...">
+</header>
+<div class="container">
+  <div class="toolbar" id="cats"></div>
+  <div class="add-bar">
+    <input id="quickTitle" placeholder="Quick add: snippet title...">
+    <button class="btn" onclick="openModal()">+ New</button>
+  </div>
+  <div class="count" id="count"></div>
+  <div id="list"></div>
+</div>
+
+<div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h3 id="modalTitle">New Snippet</h3>
+    <label>Title</label>
+    <input id="mTitle" placeholder="e.g. Email signature">
+    <label>Category</label>
+    <input id="mCat" placeholder="e.g. code, email, template" list="catList">
+    <datalist id="catList"></datalist>
+    <label>Content</label>
+    <textarea id="mBody" placeholder="Paste your text/code here..."></textarea>
+    <div class="btns">
+      <button class="btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="saveSnippet()">Save</button>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <p>Data stored locally in your browser</p>
+  <p><a href="process.env.PRIVACY_URL || 'https://your-site.com/privacy-policy/'">Privacy Policy</a> · © 2026 Orthogonal</p>
+</footer>
+
+<script>
+let snippets = JSON.parse(localStorage.getItem('tf_snippets') || '[]');
+let editId = null, filter = 'all';
+
+const search = document.getElementById('search');
+search.oninput = render;
+
+function save() { localStorage.setItem('tf_snippets', JSON.stringify(snippets)); }
+
+function getCats() {
+  const cats = new Set(snippets.map(s => s.cat || 'uncategorized'));
+  return ['all', ...cats];
+}
+
+function render() {
+  const q = search.value.toLowerCase();
+  const cats = getCats();
+  
+  document.getElementById('cats').innerHTML = cats.map(c =>
+    '<button class="btn-sm' + (filter === c ? ' active' : '') + '" onclick="setFilter(\'' + c + '\')">' + c + '</button>'
+  ).join('');
+  
+  let filtered = snippets;
+  if (filter !== 'all') filtered = filtered.filter(s => (s.cat || 'uncategorized') === filter);
+  if (q) filtered = filtered.filter(s => s.title.toLowerCase().includes(q) || s.body.toLowerCase().includes(q));
+  
+  document.getElementById('count').textContent = filtered.length + ' snippet' + (filtered.length !== 1 ? 's' : '');
+  
+  if (filtered.length === 0) {
+    document.getElementById('list').innerHTML = '<div class="empty"><div class="icon">📝</div><p>No snippets yet. Click "+ New" to add one!</p></div>';
+    return;
+  }
+  
+  document.getElementById('list').innerHTML = filtered.map(s =>
+    '<div class="snippet">' +
+    '<div class="snippet-header"><span class="snippet-title">' + esc(s.title) + '</span>' +
+    '<span class="snippet-cat">' + esc(s.cat || 'uncategorized') + '</span></div>' +
+    '<div class="snippet-body">' + esc(s.body) + '</div>' +
+    '<div class="snippet-actions">' +
+    '<button id="cp_' + s.id + '" onclick="copySnippet(\'' + s.id + '\')">📋 Copy</button>' +
+    '<button onclick="editSnippet(\'' + s.id + '\')">✏️ Edit</button>' +
+    '<button onclick="deleteSnippet(\'' + s.id + '\')">🗑️</button>' +
+    '</div></div>'
+  ).join('');
+}
+
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function setFilter(c) { filter = c; render(); }
+
+function openModal(id) {
+  editId = id || null;
+  document.getElementById('modalTitle').textContent = id ? 'Edit Snippet' : 'New Snippet';
+  const s = id ? snippets.find(x => x.id === id) : null;
+  document.getElementById('mTitle').value = s ? s.title : document.getElementById('quickTitle').value;
+  document.getElementById('mCat').value = s ? (s.cat || '') : '';
+  document.getElementById('mBody').value = s ? s.body : '';
+  
+  const dl = document.getElementById('catList');
+  dl.innerHTML = getCats().filter(c => c !== 'all').map(c => '<option value="' + c + '">').join('');
+  
+  document.getElementById('modalBg').classList.add('show');
+  document.getElementById(id ? 'mBody' : 'mTitle').focus();
+}
+
+function closeModal() { document.getElementById('modalBg').classList.remove('show'); editId = null; }
+
+function saveSnippet() {
+  const title = document.getElementById('mTitle').value.trim();
+  const body = document.getElementById('mBody').value.trim();
+  const cat = document.getElementById('mCat').value.trim() || 'uncategorized';
+  if (!title || !body) return;
+  
+  if (editId) {
+    const s = snippets.find(x => x.id === editId);
+    if (s) { s.title = title; s.body = body; s.cat = cat; s.updated = Date.now(); }
+  } else {
+    snippets.unshift({ id: Date.now().toString(36), title, body, cat, created: Date.now(), updated: Date.now() });
+  }
+  save(); render(); closeModal();
+  document.getElementById('quickTitle').value = '';
+}
+
+function copySnippet(id) {
+  const s = snippets.find(x => x.id === id);
+  if (!s) return;
+  navigator.clipboard.writeText(s.body).then(() => {
+    const btn = document.getElementById('cp_' + id);
+    btn.textContent = '✅ Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '📋 Copy'; btn.classList.remove('copied'); }, 1500);
+  });
+}
+
+function editSnippet(id) { openModal(id); }
+
+function deleteSnippet(id) {
+  if (!confirm('Delete this snippet?')) return;
+  snippets = snippets.filter(s => s.id !== id);
+  save(); render();
+}
+
+// Seed with example if empty
+if (snippets.length === 0) {
+  snippets = [
+    { id: 'ex1', title: 'Console Log', body: 'console.log(JSON.stringify(data, null, 2));', cat: 'code', created: Date.now(), updated: Date.now() },
+    { id: 'ex2', title: 'Email Reply', body: 'Thank you for reaching out! I\'ll review this and get back to you shortly.\n\nBest regards', cat: 'email', created: Date.now(), updated: Date.now() },
+  ];
+  save();
+}
+render();
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>

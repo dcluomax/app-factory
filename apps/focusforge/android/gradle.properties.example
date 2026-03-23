@@ -1,0 +1,10 @@
+android.useAndroidX=true
+android.enableJetifier=false
+newArchEnabled=true
+hermesEnabled=true
+MYAPP_UPLOAD_STORE_FILE=/path/to/your/release.keystore
+MYAPP_UPLOAD_KEY_ALIAS=your-key-alias
+MYAPP_UPLOAD_STORE_PASSWORD=your-store-password
+MYAPP_UPLOAD_KEY_PASSWORD=your-key-password
+org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m
+org.gradle.parallel=false
