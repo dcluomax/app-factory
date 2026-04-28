@@ -86,3 +86,7 @@ PRIVACY_URL=https://your-site.com/privacy-policy/
 ## License
 
 MIT
+
+## Further Reading
+
+- [CI/CD Pipeline Security Guide](https://orthogonal.info/ci-cd-pipeline-in-devops-secure-scalable-guide/) — Best practices for building secure, scalable CI/CD pipelines
